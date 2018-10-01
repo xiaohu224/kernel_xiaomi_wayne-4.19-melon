@@ -133,6 +133,16 @@ static inline int ext4_es_is_hole(struct extent_status *es)
 	return (ext4_es_type(es) & EXTENT_STATUS_HOLE) != 0;
 }
 
+static inline int ext4_es_is_mapped(struct extent_status *es)
+{
+	return (ext4_es_is_written(es) || ext4_es_is_unwritten(es));
+}
+
+static inline int ext4_es_is_delonly(struct extent_status *es)
+{
+	return (ext4_es_is_delayed(es) && !ext4_es_is_unwritten(es));
+}
+
 static inline void ext4_es_set_referenced(struct extent_status *es)
 {
 	es->es_pblk |= ((ext4_fsblk_t)EXTENT_STATUS_REFERENCED) << ES_SHIFT;
@@ -181,5 +191,13 @@ extern int ext4_es_register_shrinker(struct ext4_sb_info *sbi);
 extern void ext4_es_unregister_shrinker(struct ext4_sb_info *sbi);
 
 extern int ext4_seq_es_shrinker_info_show(struct seq_file *seq, void *v);
+
+extern int __init ext4_init_pending(void);
+extern void ext4_exit_pending(void);
+extern void ext4_init_pending_tree(struct ext4_pending_tree *tree);
+extern void ext4_remove_pending(struct inode *inode, ext4_lblk_t lblk);
+extern bool ext4_is_pending(struct inode *inode, ext4_lblk_t lblk);
+extern int ext4_es_insert_delayed_block(struct inode *inode, ext4_lblk_t lblk,
+					bool allocated);
 
 #endif /* _EXT4_EXTENTS_STATUS_H */
