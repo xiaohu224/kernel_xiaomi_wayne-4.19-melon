@@ -117,9 +117,8 @@ int mb_cache_entry_create(struct mb_cache *cache, gfp_t mask, u32 key,
 	atomic_set(&entry->e_refcnt, 2);
 	entry->e_key = key;
 	entry->e_value = value;
-	entry->e_flags = 0;
-	if (reusable)
-		set_bit(MBE_REUSABLE_B, &entry->e_flags);
+	entry->e_reusable = reusable;
+	entry->e_referenced = 0;
 	head = mb_cache_entry_head(cache, key);
 	hlist_bl_lock(head);
 	list_for_each_entry(tmp_req, &bucket->req_list, lnode) {
@@ -210,8 +209,7 @@ static struct mb_cache_entry *__entry_find(struct mb_cache *cache,
 	while (node) {
 		entry = hlist_bl_entry(node, struct mb_cache_entry,
 				       e_hash_list);
-		if (entry->e_key == key &&
-		    test_bit(MBE_REUSABLE_B, &entry->e_flags) &&
+		if (entry->e_key == key && entry->e_reusable &&
 		    atomic_inc_not_zero(&entry->e_refcnt))
 			goto out;
 		node = node->next;
@@ -367,7 +365,7 @@ EXPORT_SYMBOL(mb_cache_entry_delete_or_get);
 void mb_cache_entry_touch(struct mb_cache *cache,
 			  struct mb_cache_entry *entry)
 {
-	set_bit(MBE_REFERENCED_B, &entry->e_flags);
+	entry->e_referenced = 1;
 }
 EXPORT_SYMBOL(mb_cache_entry_touch);
 
@@ -392,9 +390,9 @@ static unsigned long mb_cache_shrink(struct mb_cache *cache,
 		entry = list_first_entry(&cache->c_list,
 					 struct mb_cache_entry, e_list);
 		/* Drop initial hash reference if there is no user */
-		if (test_bit(MBE_REFERENCED_B, &entry->e_flags) ||
+		if (entry->e_referenced ||
 		    atomic_cmpxchg(&entry->e_refcnt, 1, 0) != 1) {
-			clear_bit(MBE_REFERENCED_B, &entry->e_flags);
+			entry->e_referenced = 0;
 			list_move_tail(&entry->e_list, &cache->c_list);
 			continue;
 		}
